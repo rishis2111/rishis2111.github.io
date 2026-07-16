@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S.H.A.D.O.W.</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --bg:#050a0f;
+    --bg2:#0a1620;
+    --cyan:#4fd8f0;
+    --cyan-dim:#1c5f6e;
+    --amber:#ffb020;
+    --red:#ff5c5c;
+    --text:#dff6fb;
+    --text-dim:#6f95a0;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;height:100%;
+    background:radial-gradient(ellipse at 50% 0%, #0d1e29 0%, var(--bg) 55%, #020508 100%);
+    color:var(--text);
+    font-family:'Share Tech Mono', monospace;
+    overflow:hidden;
+  }
+  #app{
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+    grid-template-columns:1fr;
+    height:100%;position:relative;
+  }
+  #topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:16px 22px;flex-wrap:wrap;gap:10px;position:relative;z-index:5;
+  }
+  .brand{
+    font-family:'Orbitron',sans-serif;font-weight:800;letter-spacing:6px;
+    font-size:14px;color:var(--cyan);opacity:.85;
+    text-shadow:0 0 12px rgba(79,216,240,.6);
+  }
+  .brand span{color:var(--text-dim);font-weight:400;letter-spacing:3px;}
+
+  #hud{display:flex;gap:16px;align-items:center;}
+  .hud-item{
+    font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;
+    color:var(--text-dim);display:flex;flex-direction:column;align-items:flex-end;line-height:1.5;
+  }
+  .hud-item b{color:var(--cyan);font-size:12px;text-shadow:0 0 6px rgba(79,216,240,.5);}
+
+  /* Zentrale Bühne für das 3D-Gesicht und die neuen HUD-Panels */
+  #stage{
+    position:relative;min-height:0;overflow:hidden;
+    display:grid;
+    grid-template-columns: 280px 1fr 280px;
+    grid-template-rows: 1fr;
+    gap: 16px;
+    padding: 16px;
+    height:100%;
+  }
+
+  @media (max-width: 900px) {
+    #stage {
+      grid-template-columns: 1fr;
+    }
+    .hud-panel-left, .hud-panel-right {
+      display: none;
+    }
+  }
+
+  #faceCanvas3d{
+    width:100%;height:100%;display:block;cursor:pointer;
+  }
+
+  #faceOverlay{
+    position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    pointer-events:none;z-index:4;width:100%;
+  }
+  #faceOverlay > *{pointer-events:auto;}
+
+  #status{
+    font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:4px;
+    color:var(--cyan);text-transform:uppercase;min-height:16px;
+    text-shadow:0 0 8px rgba(79,216,240,.5);
+  }
+
+  /* Controls */
+  #controls{display:flex;gap:14px;align-items:center;opacity:0;pointer-events:none;transition:opacity .35s ease;flex-wrap:wrap;justify-content:center;}
+  #controls.visible{opacity:1;pointer-events:auto;}
+  #hint{font-size:9px;color:var(--text-dim);letter-spacing:1px;opacity:.6;text-align:center;max-width:320px;}
+  .btn{
+    background:transparent;border:1px solid var(--cyan-dim);color:var(--cyan);
+    font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:2px;
+    padding:10px 16px;border-radius:4px;cursor:pointer;transition:.2s;
+  }
+  .btn:hover{background:rgba(79,216,240,.1);border-color:var(--cyan);}
+  .btn.active{background:rgba(79,216,240,.18);box-shadow:0 0 12px rgba(79,216,240,.4);}
+  .icon-btn{
+    width:40px;height:40px;border-radius:50%;border:1px solid var(--cyan-dim);
+    background:rgba(4,10,14,.5);color:var(--cyan);cursor:pointer;display:flex;
+    align-items:center;justify-content:center;font-size:16px;transition:.2s;
+  }
+  .icon-btn:hover{background:rgba(79,216,240,.12);}
+
+  video#camview{
+    position:absolute;bottom:14px;right:14px;width:110px;height:82px;
+    border:1px solid var(--cyan-dim);border-radius:4px;object-fit:cover;
+    opacity:0;pointer-events:none;transition:opacity .3s;background:#000;z-index:6;
+  }
+  video#camview.show{opacity:1;}
+
+  #footer{
+    font-size:9px;color:var(--text-dim);letter-spacing:1px;
+    opacity:.55;text-align:center;font-family:'Share Tech Mono',monospace;
+    padding:8px 0 4px;position:relative;z-index:5;
+  }
+
+  /* Status badges */
+  #badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:520px;}
+  .badge{
+    display:flex;align-items:center;gap:5px;font-size:10px;letter-spacing:1px;
+    padding:4px 9px;border-radius:20px;border:1px solid var(--cyan-dim);color:var(--text-dim);
+    font-family:'Orbitron',sans-serif;text-transform:uppercase;transition:.2s;
+    background:rgba(4,10,14,.5);
+  }
+  .badge .dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);flex:none;}
+  .badge.on{color:var(--cyan);border-color:var(--cyan);}
+  .badge.on .dot{background:var(--cyan);box-shadow:0 0 6px var(--cyan);}
+  .badge.off .dot{background:var(--red);}
+
+  /* Chat: schwebendes Popup statt Sidebar */
+  #chatToggleBtn{
+    position:fixed;right:22px;bottom:22px;z-index:20;width:54px;height:54px;
+    border-radius:50%;border:1px solid var(--cyan);background:rgba(8,18,24,.85);
+    color:var(--cyan);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 18px rgba(79,216,240,.35);transition:.2s;
+  }
+  #chatToggleBtn:hover{background:rgba(79,216,240,.15);}
+  #chatToggleBtn .pingdot{
+    position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;
+    background:var(--amber);box-shadow:0 0 6px var(--amber);display:none;
+  }
+  #chatToggleBtn.unread .pingdot{display:block;}
+
+  #chatPopup{
+    position:fixed;right:22px;bottom:88px;z-index:19;
+    width:min(92vw,380px);height:min(64vh,560px);
+    display:flex;flex-direction:column;min-height:0;
+    background:rgba(6,14,18,.82);backdrop-filter:blur(10px);
+    border:1px solid var(--cyan-dim);border-radius:14px;
+    box-shadow:0 10px 40px rgba(0,0,0,.5), 0 0 24px rgba(79,216,240,.12);
+    padding:14px 14px 12px;
+    opacity:0;transform:translateY(16px) scale(.98);pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;
+  }
+  #chatPopup.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+  @media (max-width:520px){
+    #chatPopup{right:10px;left:10px;width:auto;bottom:84px;}
+    #chatToggleBtn{right:16px;bottom:16px;}
+  }
+
+  #chat-head{
+    font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:3px;
+    color:var(--text-dim);padding-bottom:10px;margin-bottom:6px;
+    border-bottom:1px solid var(--cyan-dim);display:flex;justify-content:space-between;align-items:center;
+  }
+  #chat-head b{color:var(--cyan);}
+  #chatCloseBtn{background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;}
+  #chatCloseBtn:hover{color:var(--cyan);}
+
+  /* Transcript log */
+  #log{
+    width:100%;flex:1;overflow-y:auto;min-height:0;
+    padding:10px 4px;display:flex;flex-direction:column;gap:10px;
+    -webkit-mask-image:linear-gradient(to bottom, transparent, black 4%, black 94%, transparent);
+  }
+  .bubble-row{display:flex;opacity:0;animation:fadein .3s forwards;max-width:88%;}
+  .bubble-row.you{align-self:flex-end;flex-direction:row-reverse;}
+  .bubble-row.jarvis{align-self:flex-start;}
+  .bubble{
+    padding:9px 13px;border-radius:12px;font-size:13.5px;line-height:1.5;
+  }
+  .bubble-row.you .bubble{background:rgba(255,176,32,.12);border:1px solid rgba(255,176,32,.35);color:var(--amber);border-bottom-right-radius:3px;}
+  .bubble-row.jarvis .bubble{background:rgba(79,216,240,.08);border:1px solid var(--cyan-dim);color:var(--text);border-bottom-left-radius:3px;}
+  .bubble img{max-width:100%;border-radius:8px;display:block;margin-top:6px;border:1px solid var(--cyan-dim);}
+  .bubble-label{font-size:9px;letter-spacing:2px;color:var(--text-dim);margin:0 4px 3px;font-family:'Orbitron',sans-serif;}
+  .bubble-row.you .bubble-label{text-align:right;}
+  #log .sys{align-self:center;color:var(--text-dim);font-style:italic;font-size:11px;opacity:.85;}
+  .typing-dots span{display:inline-block;width:5px;height:5px;background:var(--cyan);border-radius:50%;margin:0 2px;animation:tdot 1.1s infinite;}
+  .typing-dots span:nth-child(2){animation-delay:.15s;}
+  .typing-dots span:nth-child(3){animation-delay:.3s;}
+  @keyframes tdot{0%,60%,100%{opacity:.25;transform:translateY(0);}30%{opacity:1;transform:translateY(-3px);}}
+
+  /* Text input bar */
+  #inputbar{display:flex;gap:8px;width:100%;margin-top:10px;flex:none;}
+  #textInput{
+    flex:1;background:#02090c;border:1px solid var(--cyan-dim);color:var(--text);
+    padding:11px 14px;border-radius:22px;font-family:'Share Tech Mono',monospace;font-size:13px;
+  }
+  #textInput:focus{outline:none;border-color:var(--cyan);}
+  #sendBtn{
+    width:42px;height:42px;border-radius:50%;border:1px solid var(--cyan);background:rgba(79,216,240,.12);
+    color:var(--cyan);cursor:pointer;font-size:15px;transition:.2s;flex:none;
+  }
+  #sendBtn:hover{background:rgba(79,216,240,.25);}
+  #stopSpeakBtn{display:none;}
+  #stopSpeakBtn.show{display:flex;}
+
+  /* Toasts */
+  #toasts{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;align-items:center;}
+  .toast{
+    background:#1a0e0e;border:1px solid var(--red);color:#ffd6d6;font-size:12px;
+    padding:9px 16px;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.4);
+    opacity:0;animation:toastin .25s forwards;max-width:80vw;
+  }
+  .toast.info{border-color:var(--cyan);background:#08161a;color:var(--text);}
+  @keyframes toastin{to{opacity:1;}}
+
+  /* Setup / settings modal */
+  .modal-back{
+    position:fixed;inset:0;background:rgba(2,5,8,.88);backdrop-filter:blur(4px);
+    display:flex;align-items:center;justify-content:center;z-index:50;
+  }
+  .modal{
+    width:min(90vw,380px);background:var(--bg2);border:1px solid var(--cyan-dim);
+    border-radius:8px;padding:24px;box-shadow:0 0 40px rgba(79,216,240,.15);
+  }
+  .modal h2{font-family:'Orbitron',sans-serif;color:var(--cyan);font-size:16px;letter-spacing:2px;margin:0 0 6px;}
+  .modal p{color:var(--text-dim);font-size:12px;line-height:1.5;margin:0 0 16px;}
+  .modal label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px;}
+  .modal input{
+    width:100%;background:#02090c;border:1px solid var(--cyan-dim);color:var(--text);
+    padding:10px;border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:13px;margin-bottom:14px;
+  }
+  .modal input:focus{outline:none;border-color:var(--cyan);}
+  .modal .row{display:flex;gap:8px;justify-content:flex-end;}
+  .modal a{color:var(--cyan);}
+  #err{color:var(--red);font-size:11px;min-height:14px;margin:-8px 0 10px;}
+
+  /* --- NEUE HUD-PANELS STYLE --- */
+  .hud-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 3;
+    pointer-events: auto;
+    justify-content: center;
+  }
+
+  .panel-box {
+    background: rgba(4, 10, 14, 0.65);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 4px;
+    padding: 12px;
+    box-shadow: inset 0 0 15px rgba(79, 216, 240, 0.05);
+    backdrop-filter: blur(5px);
+  }
+
+  .panel-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--cyan);
+    border-bottom: 1px solid var(--cyan-dim);
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+    text-shadow: 0 0 6px rgba(79, 216, 240, 0.4);
+  }
+
+  .tech-text {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* Echter Akku-Balken */
+  .loading-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(79, 216, 240, 0.1);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 4px;
+    margin: 6px 0;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    transition: width 0.5s ease-in-out;
+  }
+
+  /* Terminal-Feed für die Fakten */
+  .terminal-feed {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--text);
+    opacity: 0.8;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .feed-line {
+    border-left: 2px solid var(--cyan);
+    padding-left: 6px;
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+
+  /* Aktivitäts-Balken */
+  .activity-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 60px;
+    margin-top: 10px;
+    border-bottom: 1px solid var(--cyan-dim);
+    padding-bottom: 2px;
+  }
+  .chart-bar {
+    flex: 1;
+    margin: 0 2px;
+    background: rgba(79, 216, 240, 0.3);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 2px 2px 0 0;
+    transition: height 0.3s ease, background 0.3s ease;
+  }
+  .chart-bar.active {
+    background: var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
+  }
+
+  /* Audio-Frequenzen */
+  .audio-waves {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    height: 60px;
+  }
+  .wave-bar {
+    width: 6px;
+    height: 8px;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    border-radius: 2px;
+    transition: height 0.1s ease;
+  }
+</style>
+</head>
+<body>
+<div id="toasts"></div>
+<div id="app">
+
+  <div id="topbar">
+    <div class="brand">S.H.A.D.O.W. <span>// PERSONAL ASSISTANT</span></div>
+    <div id="hud">
+      <div class="hud-item">DATUM<b id="hudDate">--</b></div>
+      <div class="hud-item">ZEIT<b id="hudTime">--:--:--</b></div>
+      <div class="hud-item">VERBINDUNG<b id="hudNet">--</b></div>
+      <div class="hud-item">AKKU<b id="hudBattery">--</b></div>
+    </div>
+  </div>
+
+  <div id="stage">
+    <!-- LINKE SEITE: System- & Gedächtnis-Daten -->
+    <div class="hud-panel hud-panel-left">
+      <div class="panel-box">
+        <div class="panel-title">SYSTEM MONITOR</div>
+        <div class="panel-content">
+          <span class="tech-text">BATTERY STATUS:</span>
+          <div class="loading-bar">
+            <div id="hudBatteryBar" class="bar-fill" style="width: 0%"></div>
+          </div>
+          <span id="hudBatteryText" class="tech-text" style="color: var(--cyan);">Lade...</span>
+        </div>
+      </div>
+      
+      <div class="panel-box">
+        <div class="panel-title">MEMORY MATRIX</div>
+        <div class="panel-content">
+          <span class="tech-text">SAVED FACTS: <b id="hudMemoryCount" style="color: var(--cyan);">0</b></span>
+          <div id="hudMemoryList" class="terminal-feed" style="height: 110px; margin-top: 8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MITTE: 3D-Gesicht -->
+    <div id="stage-center" style="position:relative; width:100%; height:100%; min-height:0; display:flex; align-items:center; justify-content:center;">
+      <canvas id="faceCanvas3d"></canvas>
+      <div id="faceOverlay">
+        <div id="status">initialisiere</div>
+        <div id="badges"></div>
+        <div id="controls">
+          <button class="icon-btn" id="micBtn" title="Manuell sprechen">🎤</button>
+          <button class="btn" id="toggleListen">WAKE-WORD AN</button>
+          <button class="icon-btn" id="stopSpeakBtn" title="Sprechen stoppen">⏹</button>
+          <button class="icon-btn" id="folderBtn" title="Ordner freigeben (Dateizugriff)">📁</button>
+          <button class="icon-btn" id="googleBtn" title="Mit Google verbinden (Kalender & E-Mail)">🔗</button>
+          <button class="icon-btn" id="settingsBtn" title="Einstellungen">⚙</button>
+        </div>
+        <div id="hint">Sag "Shadow, zeig Steuerung" oder tippe auf das Gesicht, um die Buttons einzublenden.</div>
+      </div>
+      <video id="camview" autoplay playsinline muted></video>
+      <canvas id="camcanvas" style="display:none"></canvas>
+    </div>
+
+    <!-- RECHTE SEITE: Echte Aktivität & Sprachwellen -->
+    <div class="hud-panel hud-panel-right">
+      <div class="panel-box">
+        <div class="panel-title">CONVERSATION DENSITY</div>
+        <div class="panel-content">
+          <span class="tech-text">TOTAL MESSAGES: <b id="hudMsgCount" style="color: var(--cyan);">0</b></span>
+          <div id="activityChart" class="activity-chart"></div>
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-title">VOICE TRANSMISSION</div>
+        <div class="panel-content audio-waves">
+          <div class="wave-bar" id="wave1"></div>
+          <div class="wave-bar" id="wave2"></div>
+          <div class="wave-bar" id="wave3"></div>
+          <div class="wave-bar" id="wave4"></div>
+          <div class="wave-bar" id="wave5"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="footer">© S.H.A.D.O.W. — erstellt von Rishi Sundri. Alle Rechte vorbehalten.</div>
+</div>
+
+<button id="chatToggleBtn" title="Chat öffnen/schließen">💬<span class="pingdot"></span></button>
+<div id="chatPopup">
+  <div id="chat-head">GESPRÄCHSPROTOKOLL <b id="chatCount"></b><button id="chatCloseBtn" title="Schließen">✕</button></div>
+  <div id="log"></div>
+  <div id="inputbar">
+    <input type="text" id="textInput" placeholder="Nachricht an Shadow eingeben..." autocomplete="off">
+    <button id="sendBtn" title="Senden">➤</button>
+  </div>
+</div>
+
+<div class="modal-back" id="setupModal" style="display:none">
+  <div class="modal">
+    <h2>ERSTEINRICHTUNG</h2>
+    <p>Hallo Herr Sundri. Ich bitte Sie, sich zu verifizieren.</p>
+    <div id="err"></div>
+    <label>GEMINI API-KEY</label>
+    <input type="password" id="apiKeyInput" placeholder="AIza..." autocomplete="off">
+    <label>WAKE-WORD (dein Aktivierungswort)</label>
+    <input type="text" id="wakeWordInput" value="Shadow">
+    <div class="row"><button class="btn active" id="saveSetup">SPEICHERN & STARTEN</button></div>
+  </div>
+</div>
+
+<div class="modal-back" id="settingsModal" style="display:none">
+  <div class="modal">
+    <h2>EINSTELLUNGEN</h2>
+    <label>GEMINI API-KEY</label>
+    <input type="password" id="apiKeyInput2" placeholder="AIza...">
+    <label>GEMINI MODELL (Text, Werkzeuge & Kamera)</label>
+    <input type="text" id="modelInput2" placeholder="gemini-2.5-flash">
+    <label>WAKE-WORD</label>
+    <input type="text" id="wakeWordInput2">
+    <label>STIMME</label>
+    <select id="voiceSelect2"><option value="">Automatisch (männlich bevorzugt)</option></select>
+    <label>TONHÖHE (0.5 tief/männlich – 1.5 hoch), Standard 0.82</label>
+    <input type="number" id="pitchInput2" min="0.5" max="1.5" step="0.02" placeholder="0.82">
+    <label>SPRECHGESCHWINDIGKEIT (0.7–1.3), Standard 1.04</label>
+    <input type="number" id="rateInput2" min="0.7" max="1.3" step="0.02" placeholder="1.04">
+    <label>GOOGLE CLIENT-ID (für Kalender & E-Mail)</label>
+    <input type="text" id="googleClientIdInput" placeholder="123...apps.googleusercontent.com">
+    <div class="row">
+      <button class="btn" id="clearChat">CHAT LEEREN</button>
+      <button class="btn" id="clearAll">ALLES ZURÜCKSETZEN</button>
+      <button class="btn active" id="saveSettings">SPEICHERN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const logEl = $('log'), statusEl = $('status'), coreWrap = $('stage');
+  const camview = $('camview'), camcanvas = $('camcanvas');
+  const faceCanvas3d = $('faceCanvas3d');
+  let faceMode = 'idle'; // idle | listening | thinking | speaking
+  let mouthLevel = 0; // 0..1, animated while speaking
+
+  let apiKey = localStorage.getItem('Shadow_apikey') || '';
+  let geminiModel = localStorage.getItem('Shadow_model') || 'gemini-2.5-flash';
+  let wakeWord = (localStorage.getItem('Shadow_wakeword') || 'Shadow').toLowerCase();
+  let controlsVisible = false;
+  let history = JSON.parse(localStorage.getItem('Shadow_history') || '[]');
+  let memoryFacts = JSON.parse(localStorage.getItem('Shadow_memory') || '[]');
+  let dirHandle = null;
+  let googleClientId = localStorage.getItem('Shadow_google_clientid') || '';
+  let googleAccessToken = null;
+  let googleTokenClient = null;
+  let pendingAction = null;
+  let camStream = null;
+  let recognition = null;
+  let wakeModeOn = true;
+  let awaitingCommand = false;
+  let isSpeaking = false;
+  let isBusy = false;
+  let convoTimeout = null;
+  let chatOpen = false;
+
+  // ---------- Mini IndexedDB helper (für den Ordner-Handle) ----------
+  function idbOpen(){
+    return new Promise((res, rej) => {
+      const req = indexedDB.open('shadow_store', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('kv');
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  }
+  async function idbSet(key, val){
+    const db = await idbOpen();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('kv','readwrite');
+      tx.objectStore('kv').put(val, key);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  }
+  async function idbGet(key){
+    const db = await idbOpen();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('kv','readonly');
+      const req = tx.objectStore('kv').get(key);
+      req.onsuccess = () => res(req.result || null);
+      req.onerror = () => rej(req.error);
+    });
+  }
+
+  function setStatus(text, mode){
+    statusEl.textContent = text;
+    coreWrap.className = mode || '';
+    faceMode = mode === 'listening' ? 'listening' : mode === 'thinking' ? 'thinking' : mode === 'speaking' ? 'speaking' : 'idle';
+  }
+
+  // ---------- Echtes 3D-KI-Gesicht (Three.js), folgt dem Mauszeiger ----------
+  let scanRing; // Global deklarieren, damit wir in der animate() darauf zugreifen können[cite: 1]
+  (function initFace3D(){
+    if(!window.THREE){ console.warn('THREE.js nicht geladen'); return; }
+
+    const renderer = new THREE.WebGLRenderer({ canvas: faceCanvas3d, antialias:true, alpha:true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+    camera.position.set(0, 0.2, 6.4); // Leicht nach oben verschoben wegen Hals/Schultern
+
+    // Beleuchtung: kühles Rim-Licht + warmes Fülllicht + weiches Umgebungslicht
+    scene.add(new THREE.AmbientLight(0x203040, 1.1));
+    const key = new THREE.PointLight(0x9fe8ff, 2.2, 20); key.position.set(2.5, 2.5, 4); scene.add(key);
+    const rim = new THREE.PointLight(0x4fd8f0, 1.6, 20); rim.position.set(-3, 1, -2); scene.add(rim);
+    const fill = new THREE.PointLight(0xffb020, 0.5, 20); fill.position.set(0, -2, 3); scene.add(fill);
+
+    const head = new THREE.Group();
+    scene.add(head);
+
+    const skinColor = 0x0e2630;
+    const skinMat = new THREE.MeshPhysicalMaterial({
+      color: skinColor, metalness:0.15, roughness:0.35,
+      clearcoat:0.6, clearcoatRoughness:0.3,
+      emissive: 0x0a2a33, emissiveIntensity:0.35,
+      transparent:true, opacity:0.94
+    });
+    const wireMat = new THREE.MeshBasicMaterial({ color:0x4fd8f0, wireframe:true, transparent:true, opacity:0.18 });
+
+    // Schädel/Gesichtsform: leicht ellipsoide Kugel + Kiefer
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), skinMat);
+    skull.scale.set(0.92, 1.08, 0.98);
+    head.add(skull);
+    const skullWire = new THREE.Mesh(new THREE.SphereGeometry(1.002, 32, 32), wireMat);
+    skullWire.scale.copy(skull.scale);
+    head.add(skullWire);
+
+    // Kiefer/Kinn
+    const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.72, 48, 48), skinMat);
+    jaw.scale.set(1, 0.82, 0.88);
+    jaw.position.set(0, -0.78, 0.12);
+    head.add(jaw);
+
+    // --- UPGRADE: Hals & Schultern ---
+    const neckGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.9, 32);
+    const neck = new THREE.Mesh(neckGeo, skinMat);
+    neck.position.set(0, -1.2, -0.1);
+    head.add(neck);
+
+    const shouldersGeo = new THREE.SphereGeometry(1.2, 32, 16);
+    const shoulders = new THREE.Mesh(shouldersGeo, skinMat);
+    shoulders.scale.set(1.4, 0.4, 0.8);
+    shoulders.position.set(0, -1.8, -0.2);
+    head.add(shoulders);
+
+    // --- UPGRADE: Kybernetische Linien (Hologramm) ---
+    const techWireMat = new THREE.MeshBasicMaterial({ 
+      color: 0x4fd8f0, 
+      wireframe: true, 
+      transparent: true, 
+      opacity: 0.12 
+    });
+    const techGrid = new THREE.Mesh(new THREE.SphereGeometry(1.01, 32, 32), techWireMat);
+    techGrid.scale.copy(skull.scale);
+    head.add(techGrid);
+
+    // Ring-Scanner
+    const ringGeo = new THREE.RingGeometry(1.05, 1.07, 64);
+    const ringMat = new THREE.MeshBasicMaterial({ 
+      color: 0x4fd8f0, 
+      side: THREE.DoubleSide, 
+      transparent: true, 
+      opacity: 0.6 
+    });
+    scanRing = new THREE.Mesh(ringGeo, ringMat);
+    scanRing.rotation.x = Math.PI / 2;
+    head.add(scanRing);
+
+    // Nase
+    const noseMat = new THREE.MeshStandardMaterial({ color:0x0e2a33, emissive:0x2a7f93, emissiveIntensity:0.35, roughness:0.5 });
+    const noseBridge = new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.075,0.34,10), noseMat);
+    noseBridge.position.set(0, 0.1, 0.9);
+    noseBridge.rotation.x = 0.32;
+    head.add(noseBridge);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.095, 0.16, 12), noseMat);
+    nose.rotation.x = Math.PI * 0.58;
+    nose.position.set(0, -0.1, 0.98);
+    head.add(nose);
+    [-1,1].forEach(dir => {
+      const nostril = new THREE.Mesh(new THREE.SphereGeometry(0.028,10,10), new THREE.MeshStandardMaterial({color:0x030a0d}));
+      nostril.position.set(dir*0.06, -0.17, 0.95);
+      head.add(nostril);
+    });
+
+    // Augenbrauen
+    const browGeo = new THREE.BoxGeometry(0.32, 0.05, 0.05);
+    const browMat = new THREE.MeshStandardMaterial({ color:0x0a1c22, emissive:0x1c5f6e, emissiveIntensity:0.4 });
+    const browL = new THREE.Mesh(browGeo, browMat); browL.position.set(-0.34, 0.42, 0.86); head.add(browL);
+    const browR = new THREE.Mesh(browGeo, browMat); browR.position.set( 0.34, 0.42, 0.86); head.add(browR);
+
+    // Augen
+    function buildEye(x){
+      const grp = new THREE.Group();
+      grp.position.set(x, 0.2, 0.84);
+
+      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.145,24,24), new THREE.MeshStandardMaterial({color:0x02080a}));
+      socket.position.z = -0.03;
+      grp.add(socket);
+
+      const ballGrp = new THREE.Group();
+      grp.add(ballGrp);
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12,24,24), new THREE.MeshStandardMaterial({color:0xeaf7fb, roughness:0.25}));
+      ballGrp.add(ball);
+      const iris = new THREE.Mesh(new THREE.CircleGeometry(0.06,24), new THREE.MeshBasicMaterial({color:0x4fd8f0}));
+      iris.position.z = 0.115; ballGrp.add(iris);
+      const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.028,16), new THREE.MeshBasicMaterial({color:0x021014}));
+      pupil.position.z = 0.118; ballGrp.add(pupil);
+      const glow = new THREE.PointLight(0x4fd8f0, 0.5, 1.2);
+      glow.position.z = 0.14; ballGrp.add(glow);
+
+      return { group:grp, ballGrp, iris, pupil };
+    }
+    const eyeL = buildEye(-0.3);
+    const eyeR = buildEye(0.3);
+    head.add(eyeL.group, eyeR.group);
+
+    // Mund
+    const lipMat = new THREE.MeshStandardMaterial({ color:0x0d2027, emissive:0x1c5f6e, emissiveIntensity:0.55, roughness:0.4 });
+    const mouthArc = Math.PI*0.42;
+    const mouthRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.19, 0.026, 8, 24, mouthArc),
+      lipMat
+    );
+    mouthRing.rotation.z = -Math.PI/2 - mouthArc/2;
+    mouthRing.position.set(0, -0.6, 0.9);
+    head.add(mouthRing);
+    const mouthCavity = new THREE.Mesh(
+      new THREE.CircleGeometry(0.13, 20),
+      new THREE.MeshBasicMaterial({ color:0x020608, transparent:true, opacity:0.95 })
+    );
+    mouthCavity.position.set(0, -0.6, 0.895);
+    mouthCavity.scale.y = 0.12;
+    head.add(mouthCavity);
+
+    // Ohren
+    const earGeo = new THREE.SphereGeometry(0.13,16,16);
+    const earL = new THREE.Mesh(earGeo, skinMat); earL.position.set(-0.95,0.02,0.02); earL.scale.set(0.6,1,0.8); head.add(earL);
+    const earR = new THREE.Mesh(earGeo, skinMat); earR.position.set( 0.95,0.02,0.02); earR.scale.set(0.6,1,0.8); head.add(earR);
+
+    // Innerer Energiekern
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.55,32,32),
+      new THREE.MeshBasicMaterial({ color:0x4fd8f0, transparent:true, opacity:0.10 }));
+    head.add(core);
+
+    function resize(){
+      const rect = faceCanvas3d.parentElement.getBoundingClientRect();
+      const w = rect.width, h = rect.height;
+      if(w<=0||h<=0) return;
+      renderer.setSize(w, h, false);
+      camera.aspect = w/h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Mauszeiger-Tracking
+    let mouseX = 0, mouseY = 0;
+    window.addEventListener('mousemove', (e) => {
+      mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+      mouseY = (e.clientY / window.innerHeight) * 2 - 1;
+    });
+    window.addEventListener('touchmove', (e) => {
+      if(!e.touches || !e.touches[0]) return;
+      mouseX = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
+      mouseY = (e.touches[0].clientY / window.innerHeight) * 2 - 1;
+    }, {passive:true});
+
+    let curYaw = 0, curPitch = 0;
+    let t = 0;
+    let blinkTimer = 2 + Math.random()*3;
+    let blinkPhase = 0;
+
+    function colorFor(mode){
+      if(mode==='listening') return 0x4fd8f0;
+      if(mode==='thinking') return 0xffb020;
+      if(mode==='speaking') return 0x78ffd2;
+      return 0x4fd8f0;
+    }
+
+    function animate(){
+      requestAnimationFrame(animate);
+      const dt = 0.016;
+      t += dt;
+
+      // Scan-Ring bewegen lassen
+      if (scanRing) {
+        scanRing.position.y = Math.sin(t * 2) * 1.2 - 0.3;
+        scanRing.material.opacity = 0.3 + Math.abs(Math.sin(t * 2)) * 0.5;
+      }
+
+      // Kopf folgt Mauszeiger
+      const targetYaw = mouseX * 0.35;
+      const targetPitch = -mouseY * 0.22;
+      curYaw += (targetYaw - curYaw) * 0.06;
+      curPitch += (targetPitch - curPitch) * 0.06;
+      head.rotation.y = curYaw + Math.sin(t*0.25)*0.02;
+      head.rotation.x = curPitch;
+
+      // Augen tracken
+      const eyeYaw = mouseX * 0.22, eyePitch = -mouseY * 0.18;
+      [eyeL, eyeR].forEach(eye => {
+        eye.ballGrp.rotation.y += (eyeYaw - eye.ballGrp.rotation.y) * 0.25;
+        eye.ballGrp.rotation.x += (eyePitch - eye.ballGrp.rotation.x) * 0.25;
+      });
+
+      // Blinzeln
+      blinkTimer -= dt;
+      if(blinkTimer <= 0 && blinkPhase === 0){ blinkPhase = 0.0001; }
+      if(blinkPhase > 0){
+        blinkPhase += dt*7;
+        if(blinkPhase >= 1.6){ blinkPhase = 0; blinkTimer = 2 + Math.random()*4; }
+      }
+      const blinkClose = blinkPhase>0 ? Math.sin(Math.min(blinkPhase,1)*Math.PI) : 0;
+      const narrowExtra = faceMode==='thinking' ? 0.35 : 0;
+      [eyeL, eyeR].forEach(eye => { eye.ballGrp.scale.y = Math.max(0.06, 1 - blinkClose*0.94 - narrowExtra*0.5); });
+
+      // Augenbrauen
+      const browTarget = faceMode==='thinking' ? -0.06 : 0;
+      browL.position.y += (0.42+browTarget - browL.position.y)*0.1;
+      browR.position.y += (0.42+browTarget - browR.position.y)*0.1;
+      browL.rotation.z += ((faceMode==='thinking'?0.12:0) - browL.rotation.z)*0.1;
+      browR.rotation.z += ((faceMode==='thinking'?-0.12:0) - browR.rotation.z)*0.1;
+
+      // Mund & Audio Wellen synchronisieren
+      const w1 = $('wave1'), w2 = $('wave2'), w3 = $('wave3'), w4 = $('wave4'), w5 = $('wave5');
+      if(faceMode==='speaking'){
+        mouthLevel = 0.25 + Math.abs(Math.sin(t*9)) * 0.75;
+        if(w1) {
+          w1.style.height = (15 + Math.abs(Math.sin(t * 12)) * 85) + '%';
+          w2.style.height = (25 + Math.abs(Math.cos(t * 8)) * 75) + '%';
+          w3.style.height = (40 + mouthLevel * 60) + '%';
+          w4.style.height = (10 + Math.abs(Math.sin(t * 15)) * 90) + '%';
+          w5.style.height = (20 + Math.abs(Math.cos(t * 10)) * 80) + '%';
+        }
+      } else {
+        mouthLevel += ((faceMode==='listening'?0.06:0.02) - mouthLevel) * 0.15;
+        if(w1) {
+          const idleHeight = faceMode === 'listening' ? '25%' : '8%';
+          w1.style.height = idleHeight;
+          w2.style.height = idleHeight;
+          w3.style.height = idleHeight;
+          w4.style.height = idleHeight;
+          w5.style.height = idleHeight;
+        }
+      }
+      mouthCavity.scale.y = 0.12 + mouthLevel*1.5;
+      mouthCavity.scale.x = 1 + mouthLevel*0.15;
+      mouthRing.scale.y = 1 + mouthLevel*0.35;
+      mouthRing.position.y = -0.6 - mouthLevel*0.03;
+
+      // Farbschemata
+      const col = colorFor(faceMode);
+      wireMat.color.setHex(col);
+      skinMat.emissive.setHex(col);
+      techWireMat.color.setHex(col);
+      if (scanRing) scanRing.material.color.setHex(col);
+
+      const pulse = faceMode==='listening' ? (0.28+Math.sin(t*4)*0.1)
+                  : faceMode==='thinking' ? (0.3+Math.sin(t*10)*0.15)
+                  : faceMode==='speaking' ? (0.35+mouthLevel*0.2)
+                  : 0.28+Math.sin(t*0.8)*0.05;
+      skinMat.emissiveIntensity = pulse;
+      core.material.color.setHex(col);
+      core.material.opacity = 0.08 + pulse*0.15;
+      [eyeL, eyeR].forEach(eye => { eye.iris.material.color.setHex(col); });
+      key.color.setHex(col);
+
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+  })();
+
+  // ---------- HUD: Uhr, Verbindung, Akku ----------
+  (function initHud(){
+    function pad(n){ return String(n).padStart(2,'0'); }
+    function tick(){
+      const d = new Date();
+      $('hudTime').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      $('hudDate').textContent = `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    function updateNet(){
+      $('hudNet').textContent = navigator.onLine ? 'ONLINE' : 'OFFLINE';
+    }
+    updateNet();
+    window.addEventListener('online', updateNet);
+    window.addEventListener('offline', updateNet);
+
+    if(navigator.getBattery){
+      navigator.getBattery().then(bat => {
+        function updateBat(){
+          const pct = Math.round(bat.level*100);
+          const isCharging = bat.charging ? ' ⚡' : '';
+          $('hudBattery').textContent = pct + '%' + isCharging;
+
+          // Neues HUD-Panel füllen
+          $('hudBatteryBar').style.width = pct + '%';
+          $('hudBatteryText').textContent = `${pct}% ${bat.charging ? 'LÄDT' : 'ENTLÄDT'}`;
+          if(bat.charging) {
+            $('hudBatteryBar').style.background = 'var(--amber)';
+          } else {
+            $('hudBatteryBar').style.background = 'var(--cyan)';
+          }
+        }
+        updateBat();
+        bat.addEventListener('levelchange', updateBat);
+        bat.addEventListener('chargingchange', updateBat);
+      }).catch(()=>{ $('hudBattery').textContent = '—'; });
+    } else {
+      $('hudBattery').textContent = '—';
+    }
+  })();
+
+  function showToast(msg, type){
+    const t = document.createElement('div');
+    t.className = 'toast' + (type === 'info' ? ' info' : '');
+    t.textContent = msg;
+    $('toasts').appendChild(t);
+    setTimeout(() => { t.style.transition='opacity .3s'; t.style.opacity='0'; setTimeout(()=>t.remove(), 300); }, 4500);
+  }
+
+  function addLine(who, text){
+    if(who === 'sys'){
+      const d = document.createElement('div');
+      d.className = 'line sys';
+      d.textContent = text;
+      logEl.appendChild(d);
+      logEl.scrollTop = logEl.scrollHeight;
+      return;
+    }
+    const row = document.createElement('div');
+    row.className = 'bubble-row ' + who;
+    const label = document.createElement('div');
+    label.className = 'bubble-label';
+    label.textContent = who === 'you' ? 'DU' : 'SHADOW';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    const col = document.createElement('div');
+    col.appendChild(label);
+    col.appendChild(bubble);
+    row.appendChild(col);
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+
+    history.push({role: who==='you'?'user':'assistant', text: text});
+    if(history.length > 20) history = history.slice(-20);
+    localStorage.setItem('Shadow_history', JSON.stringify(history));
+    if($('chatCount')) $('chatCount').textContent = history.length;
+    if(typeof chatOpen !== 'undefined' && !chatOpen && who === 'jarvis'){
+      $('chatToggleBtn').classList.add('unread');
+    }
+    updateActivityChart();
+  }
+
+  function addImageBubble(url, caption){
+    const row = document.createElement('div');
+    row.className = 'bubble-row jarvis';
+    const label = document.createElement('div');
+    label.className = 'bubble-label';
+    label.textContent = 'SHADOW';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    if(caption){
+      const cap = document.createElement('div');
+      cap.textContent = caption;
+      bubble.appendChild(cap);
+    }
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = caption || 'Generiertes Bild';
+    bubble.appendChild(img);
+    const col = document.createElement('div');
+    col.appendChild(label);
+    col.appendChild(bubble);
+    row.appendChild(col);
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function showTyping(){
+    if($('typingRow')) return;
+    const row = document.createElement('div');
+    row.id = 'typingRow';
+    row.className = 'bubble-row jarvis';
+    row.innerHTML = `<div><div class="bubble-label">SHADOW</div><div class="bubble typing-dots"><span></span><span></span><span></span></div></div>`;
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function hideTyping(){
+    const r = $('typingRow');
+    if(r) r.remove();
+  }
+
+  function updateBadges(){
+    const badgesEl = $('badges');
+    const items = [
+      { on: !!apiKey, label: 'GEMINI' },
+      { on: wakeModeOn, label: 'WAKE-WORD' },
+      { on: !!dirHandle, label: 'ORDNER' },
+      { on: !!googleAccessToken, label: 'GOOGLE' }
+    ];
+    badgesEl.innerHTML = '';
+    items.forEach(it => {
+      const b = document.createElement('div');
+      b.className = 'badge ' + (it.on ? 'on' : 'off');
+      b.innerHTML = `<span class="dot"></span>${it.label}`;
+      badgesEl.appendChild(b);
+    });
+  }
+
+  // ---------- Setup flow ----------
+  if(!apiKey){
+    $('setupModal').style.display = 'flex';
+  } else {
+    boot();
+  }
+
+  $('saveSetup').onclick = () => {
+    const k = $('apiKeyInput').value.trim();
+    const w = $('wakeWordInput').value.trim().toLowerCase() || 'Shadow';
+    if(k.length < 10){
+      $('err').textContent = 'Das sieht nicht wie ein gültiger Gemini-Key aus. Hol ihn dir kostenlos unter aistudio.google.com/apikey.';
+      return;
+    }
+    localStorage.setItem('Shadow_apikey', k);
+    localStorage.setItem('Shadow_wakeword', w);
+    apiKey = k; wakeWord = w;
+    $('setupModal').style.display = 'none';
+    boot();
+  };
+
+  $('settingsBtn').onclick = () => {
+    $('apiKeyInput2').value = '';
+    $('modelInput2').value = geminiModel;
+    $('wakeWordInput2').value = wakeWord;
+    $('googleClientIdInput').value = googleClientId;
+    $('pitchInput2').value = localStorage.getItem('Shadow_voice_pitch') || '0.82';
+    $('rateInput2').value = localStorage.getItem('Shadow_voice_rate') || '1.04';
+    populateVoiceSelect();
+    $('settingsModal').style.display = 'flex';
+  };
+  $('saveSettings').onclick = () => {
+    const k = $('apiKeyInput2').value.trim();
+    const m = $('modelInput2').value.trim();
+    const w = $('wakeWordInput2').value.trim().toLowerCase();
+    const g = $('googleClientIdInput').value.trim();
+    const voiceName = $('voiceSelect2').value;
+    const pitch = $('pitchInput2').value.trim();
+    const rate = $('rateInput2').value.trim();
+    if(k) { localStorage.setItem('Shadow_apikey', k); apiKey = k; }
+    if(m) { localStorage.setItem('Shadow_model', m); geminiModel = m; }
+    if(w) { localStorage.setItem('Shadow_wakeword', w); wakeWord = w; }
+    if(g) { localStorage.setItem('Shadow_google_clientid', g); googleClientId = g; initGoogleTokenClient(); }
+    localStorage.setItem('Shadow_voice_name', voiceName || '');
+    if(pitch) localStorage.setItem('Shadow_voice_pitch', pitch);
+    if(rate) localStorage.setItem('Shadow_voice_rate', rate);
+    $('settingsModal').style.display = 'none';
+    updateBadges();
+    showToast('Einstellungen gespeichert.', 'info');
+    speak('So klingt meine Stimme jetzt, Sir.');
+  };
+  $('clearAll').onclick = () => {
+    localStorage.clear();
+    location.reload();
+  };
+  $('clearChat').onclick = () => {
+    history = [];
+    localStorage.setItem('Shadow_history', '[]');
+    logEl.innerHTML = '';
+    $('settingsModal').style.display = 'none';
+    showToast('Chatverlauf gelöscht.', 'info');
+    updateActivityChart();
+  };
+
+  // ---------- Chat-Popup öffnen/schließen ----------
+  function openChat(){
+    chatOpen = true;
+    $('chatPopup').classList.add('open');
+    $('chatToggleBtn').classList.remove('unread');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function closeChat(){
+    chatOpen = false;
+    $('chatPopup').classList.remove('open');
+  }
+  $('chatToggleBtn').onclick = () => { chatOpen ? closeChat() : openChat(); };
+  $('chatCloseBtn').onclick = closeChat;
+
+  // ---------- Steuerung ein-/ausblenden ----------
+  function showControls(){
+    controlsVisible = true;
+    $('controls').classList.add('visible');
+  }
+  function hideControls(){
+    controlsVisible = false;
+    $('controls').classList.remove('visible');
+  }
+  function toggleControls(){
+    controlsVisible ? hideControls() : showControls();
+  }
+  coreWrap.addEventListener('click', toggleControls);
+
+  // ---------- Boot ----------
+  async function boot(){
+    setStatus('bereit', '');
+    addLine('sys', `Sag "${wakeWord}" gefolgt von deiner Frage, tippe unten, oder klick auf den Kern für die Steuerung.`);
+    initRecognition();
+    updateBadges();
+    updateMemoryPanel();
+    updateActivityChart();
+    try{
+      const saved = await idbGet('dir_handle');
+      if(saved){
+        const perm = await saved.queryPermission({mode:'read'});
+        if(perm === 'granted'){
+          dirHandle = saved;
+          addLine('sys', `Zugriff auf Ordner "${saved.name}" wiederhergestellt.`);
+        } else {
+          addLine('sys', `Zugriff auf Ordner "${saved.name}" muss erneut bestätigt werden (📁-Button).`);
+        }
+        updateBadges();
+      }
+    }catch(e){ /* kein gespeicherter Ordner, ignorieren */ }
+  }
+
+  // ---------- Ordner freigeben (Dateizugriff) ----------
+  $('folderBtn').onclick = async () => {
+    try{
+      dirHandle = await window.showDirectoryPicker();
+      await idbSet('dir_handle', dirHandle);
+      addLine('sys', `Ordner "${dirHandle.name}" freigegeben. Ich kann jetzt Dateien darin lesen.`);
+      updateBadges();
+    }catch(e){
+      showToast('Ordnerfreigabe abgebrochen.');
+    }
+  };
+
+  // ---------- Speech recognition (Wake word + commands) ----------
+  function initRecognition(){
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SR){
+      addLine('sys', 'Dein Browser unterstützt keine Spracherkennung. Bitte Google Chrome nutzen.');
+      return;
+    }
+    recognition = new SR();
+    recognition.lang = 'de-DE';
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onresult = (e) => {
+      const res = e.results[e.results.length-1];
+      if(!res.isFinal) return;
+      const transcript = res[0].transcript.trim();
+      handleTranscript(transcript);
+    };
+
+    recognition.onerror = (e) => {
+      if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+        addLine('sys', 'Mikrofon-Zugriff wurde blockiert. Bitte klick auf das Schloss-Symbol links neben der Adresse und stell "Mikrofon" auf "Zulassen".');
+        wakeModeOn = false;
+        $('toggleListen').textContent = 'WAKE-WORD AUS';
+      }
+    };
+    recognition.onend = () => {
+      if(wakeModeOn && !isSpeaking && !isBusy){
+        setTimeout(() => { try{ recognition.start(); }catch(e){} }, 250);
+      } else if(!wakeModeOn){
+        setStatus('bereit','');
+      }
+    };
+    try{ recognition.start(); setStatus('lausche', 'listening'); }catch(e){}
+  }
+
+  $('toggleListen').onclick = () => {
+    wakeModeOn = !wakeModeOn;
+    $('toggleListen').textContent = wakeModeOn ? 'WAKE-WORD AN' : 'WAKE-WORD AUS';
+    $('toggleListen').classList.toggle('active', wakeModeOn);
+    updateBadges();
+    if(wakeModeOn){
+      try{ recognition.start(); setStatus('lausche','listening'); }catch(e){}
+    } else {
+      try{ recognition.stop(); }catch(e){}
+      setStatus('bereit','');
+    }
+  };
+
+  function handleTranscript(transcript){
+    const lower = transcript.toLowerCase();
+    if(awaitingCommand){
+      awaitingCommand = false;
+      processCommand(transcript);
+      return;
+    }
+    const idx = lower.indexOf(wakeWord);
+    if(idx === -1) return;
+    const after = transcript.slice(idx + wakeWord.length).trim();
+    if(after.length < 2){
+      speak('Ja?');
+      awaitingCommand = true;
+    } else {
+      processCommand(after);
+    }
+  }
+
+  // ---------- Manual mic button (push-to-talk) ----------
+  $('micBtn').onclick = () => {
+    if(isBusy) return;
+    awaitingCommand = true;
+    setStatus('lausche...', 'listening');
+    if(!wakeModeOn){ try{ recognition.start(); }catch(e){} }
+  };
+
+  // ---------- Texteingabe (Tippen statt Sprechen) ----------
+  function submitTextInput(){
+    const val = $('textInput').value.trim();
+    if(!val || isBusy) return;
+    $('textInput').value = '';
+    processCommand(val);
+  }
+  $('sendBtn').onclick = submitTextInput;
+  $('textInput').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter'){ e.preventDefault(); submitTextInput(); }
+  });
+
+  // ---------- Sprechen stoppen ----------
+  $('stopSpeakBtn').onclick = () => {
+    speechSynthesis.cancel();
+    isSpeaking = false;
+    isBusy = false;
+    $('stopSpeakBtn').classList.remove('show');
+    setStatus(wakeModeOn ? 'lausche' : 'bereit', wakeModeOn ? 'listening' : '');
+    if(wakeModeOn){ try{ recognition.start(); }catch(e){} }
+  };
+
+  // ---------- Camera ----------
+  async function ensureCamera(){
+    if(camStream) return camStream;
+    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false});
+    camview.srcObject = camStream;
+    return camStream;
+  }
+  async function captureImageBase64(){
+    await ensureCamera();
+    camview.classList.add('show');
+    await new Promise(r => setTimeout(r, 500));
+    const w = camview.videoWidth || 640, h = camview.videoHeight || 480;
+    camcanvas.width = w; camcanvas.height = h;
+    camcanvas.getContext('2d').drawImage(camview, 0, 0, w, h);
+    camview.classList.remove('show');
+    return camcanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+  }
+
+  // ---------- Google Sign-In (Kalender & Gmail) ----------
+  function initGoogleTokenClient(){
+    if(!googleClientId || !window.google || !google.accounts) return;
+    googleTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: googleClientId,
+      scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+      callback: (resp) => {
+        if(resp && resp.access_token){
+          googleAccessToken = resp.access_token;
+          addLine('sys', 'Mit Google verbunden. Kalender und E-Mail sind jetzt verfügbar.');
+          updateBadges();
+        }
+      }
+    });
+  }
+  window.addEventListener('load', () => setTimeout(initGoogleTokenClient, 300));
+
+  $('googleBtn').onclick = () => {
+    if(!googleClientId){
+      showToast('Bitte zuerst deine Google Client-ID in den Einstellungen (⚙) eintragen.');
+      $('settingsBtn').click();
+      return;
+    }
+    if(!googleTokenClient) initGoogleTokenClient();
+    if(googleTokenClient) googleTokenClient.requestAccessToken({ prompt: googleAccessToken ? '' : 'consent' });
+  };
+
+  async function ensureGoogleToken(){
+    if(googleAccessToken) return googleAccessToken;
+    if(!googleClientId) throw new Error('Keine Google Client-ID hinterlegt. Bitte in den Einstellungen eintragen und auf 🔗 klicken.');
+    return new Promise((resolve, reject) => {
+      if(!googleTokenClient) initGoogleTokenClient();
+      if(!googleTokenClient) return reject(new Error('Google-Anmeldung konnte nicht initialisiert werden.'));
+      googleTokenClient.callback = (resp) => {
+        if(resp && resp.access_token){ googleAccessToken = resp.access_token; resolve(resp.access_token); }
+        else reject(new Error('Google-Anmeldung fehlgeschlagen.'));
+      };
+      googleTokenClient.requestAccessToken({ prompt: 'consent' });
+    });
+  }
+
+  async function toolGetCalendarEvents(args){
+    try{
+      const token = await ensureGoogleToken();
+      const timeMin = encodeURIComponent(new Date().toISOString());
+      const timeMax = encodeURIComponent(new Date(Date.now() + (args && args.days ? args.days : 7) * 86400000).toISOString());
+      const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=15`;
+      const resp = await fetch(url, { headers:{ Authorization: 'Bearer ' + token } });
+      if(!resp.ok){ const t = await resp.text(); return {error:'Kalender-Fehler ' + resp.status + ': ' + t.slice(0,300)}; }
+      const data = await resp.json();
+      const events = (data.items||[]).map(e => ({
+        titel: e.summary || '(ohne Titel)',
+        start: e.start ? (e.start.dateTime || e.start.date) : null,
+        ort: e.location || null
+      }));
+      return { termine: events };
+    }catch(e){ return {error: e.message}; }
+  }
+
+  async function toolGetRecentEmails(args){
+    try{
+      const token = await ensureGoogleToken();
+      const max = parseInt((args && args.max_results) || 5, 10) || 5;
+      const listResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${max}&labelIds=INBOX`, { headers:{ Authorization: 'Bearer ' + token } });
+      if(!listResp.ok){ const t = await listResp.text(); return {error:'Gmail-Fehler ' + listResp.status + ': ' + t.slice(0,300)}; }
+      const listData = await listResp.json();
+      const mails = [];
+      for(const m of (listData.messages||[])){
+        const msgResp = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`, { headers:{ Authorization: 'Bearer ' + token } });
+        if(!msgResp.ok) continue;
+        const msgData = await msgResp.json();
+        const headers = (msgData.payload && msgData.payload.headers) || [];
+        mails.push({
+          von: (headers.find(h=>h.name==='From')||{}).value || '?',
+          betreff: (headers.find(h=>h.name==='Subject')||{}).value || '(kein Betreff)',
+          ausschnitt: msgData.snippet || ''
+        });
+      }
+      return { emails: mails };
+    }catch(e){ return {error: e.message}; }
+  }
+
+  const visionTriggers = ['schau','siehst du','was ist das','guck','kamera','erkennst du','beschreib was du siehst'];
+
+  // ---------- Schreibende Aktionen ----------
+  function toolPrepareCalendarEvent(args){
+    pendingAction = { type:'calendar_create', args };
+    return { status:'wartet_auf_bestaetigung', zusammenfassung: `Termin "${args.summary}" von ${args.start} bis ${args.end}${args.location ? ' in ' + args.location : ''}` };
+  }
+  function toolPrepareEmail(args){
+    pendingAction = { type:'email_send', args };
+    return { status:'wartet_auf_bestaetigung', zusammenfassung: `E-Mail an ${args.to}, Betreff "${args.subject}"` };
+  }
+
+  async function actuallyCreateCalendarEvent(args){
+    const token = await ensureGoogleToken();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const body = {
+      summary: args.summary,
+      location: args.location || undefined,
+      start: { dateTime: args.start, timeZone: tz },
+      end: { dateTime: args.end, timeZone: tz }
+    };
+    const resp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method:'POST',
+      headers:{ Authorization:'Bearer ' + token, 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    });
+    if(!resp.ok){ const t = await resp.text(); throw new Error('Kalender-Fehler ' + resp.status + ': ' + t.slice(0,150)); }
+    return await resp.json();
+  }
+
+  async function actuallySendEmail(args){
+    const token = await ensureGoogleToken();
+    const raw = [
+      `To: ${args.to}`,
+      `Subject: ${args.subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      args.body
+    ].join('\n');
+    const encoded = btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method:'POST',
+      headers:{ Authorization:'Bearer ' + token, 'Content-Type':'application/json' },
+      body: JSON.stringify({ raw: encoded })
+    });
+    if(!resp.ok){ const t = await resp.text(); throw new Error('Gmail-Fehler ' + resp.status + ': ' + t.slice(0,150)); }
+    return await resp.json();
+  }
+
+  const confirmWords = ['ja','bestätige','bestätigen','mach das','tu es','ausführen','ok mach','ja bitte','ja mach'];
+  const cancelWords = ['nein','abbrechen','stopp','lass es','ne lieber nicht'];
+
+  // ---------- Weitere Werkzeuge ----------
+  async function toolGetWeather(args){
+    try{
+      let lat, lon, ort;
+      if(args && args.location){
+        const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(args.location)}&count=1&language=de`).then(r=>r.json());
+        if(!geo.results || !geo.results.length) return {error:'Ort nicht gefunden'};
+        lat = geo.results[0].latitude; lon = geo.results[0].longitude; ort = geo.results[0].name;
+      } else {
+        const pos = await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:6000}));
+        lat = pos.coords.latitude; lon = pos.coords.longitude; ort = 'aktueller Standort';
+      }
+      const wx = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`).then(r=>r.json());
+      return { ort, temperatur_celsius: wx.current.temperature_2m, wind_kmh: wx.current.wind_speed_10m, wmo_wettercode: wx.current.weather_code };
+    }catch(e){ return {error: 'Wetterdaten nicht abrufbar: ' + e.message}; }
+  }
+
+  async function toolListFiles(){
+    if(!dirHandle) return {error:'Kein Ordner freigegeben. Der Nutzer muss zuerst auf den 📁-Button klicken.'};
+    try{
+      const names = [];
+      for await (const entry of dirHandle.values()){ if(entry.kind==='file') names.push(entry.name); }
+      return { dateien: names.slice(0,80) };
+    }catch(e){ return {error:'Ordner nicht lesbar: ' + e.message}; }
+  }
+
+  async function toolReadFile(args){
+    if(!dirHandle) return {error:'Kein Ordner freigegeben.'};
+    try{
+      const fh = await dirHandle.getFileHandle(args.filename);
+      const file = await fh.getFile();
+      const text = await file.text();
+      return { inhalt: text.slice(0, 4000) };
+    }catch(e){ return {error:'Datei nicht gefunden oder nicht lesbar: ' + args.filename}; }
+  }
+
+  function toolGenerateImage(args){
+    const prompt = (args && args.prompt) || '';
+    if(!prompt) return { error: 'Kein Bildbeschreibung angegeben.' };
+    const seed = Math.floor(Math.random()*100000);
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=768&seed=${seed}&nologo=true`;
+    addImageBubble(url, `Bild: "${prompt}"`);
+    return { status: 'bild_wird_angezeigt', hinweis: 'Das Bild wurde dem Nutzer bereits direkt im Chat angezeigt.' };
+  }
+
+  function toolShowControls(){ showControls(); return { status: 'steuerung_eingeblendet' }; }
+  function toolHideControls(){ hideControls(); return { status: 'steuerung_ausgeblendet' }; }
+  function toolOpenSettings(){ $('settingsBtn').click(); return { status: 'einstellungen_geoeffnet' }; }
+  function toolCloseSettings(){ $('settingsModal').style.display = 'none'; return { status: 'einstellungen_geschlossen' }; }
+
+  function toolRememberFact(args){
+    memoryFacts.push(args.fact);
+    if(memoryFacts.length > 100) memoryFacts = memoryFacts.slice(-100);
+    localStorage.setItem('Shadow_memory', JSON.stringify(memoryFacts));
+    updateMemoryPanel();
+    return { status: 'gespeichert' };
+  }
+
+  const toolDeclarations = [
+    { name:'get_weather', description:'Ruft aktuelle Echtzeit-Wetterdaten für einen Ort ab (oder für den aktuellen Standort, wenn kein Ort genannt wird).',
+      parameters:{ type:'OBJECT', properties:{ location:{ type:'STRING', description:'Stadt oder Ort. Leer lassen für aktuellen Standort.' } } } },
+    { name:'list_files', description:'Listet die Dateinamen im vom Nutzer freigegebenen lokalen Ordner auf.',
+      parameters:{ type:'OBJECT', properties:{} } },
+    { name:'read_file', description:'Liest den Textinhalt einer Datei aus dem freigegebenen lokalen Ordner.',
+      parameters:{ type:'OBJECT', properties:{ filename:{ type:'STRING', description:'Exakter Dateiname inkl. Endung' } }, required:['filename'] } },
+    { name:'remember_fact', description:'Speichert eine wichtige, dauerhafte Information über den Nutzer oder seine Vorlieben für zukünftige Gespräche.',
+      parameters:{ type:'OBJECT', properties:{ fact:{ type:'STRING', description:'Die zu merkende Tatsache, kurz und klar formuliert' } }, required:['fact'] } },
+    { name:'get_calendar_events', description:'Ruft die anstehenden Termine aus dem Google-Kalender des Nutzers ab.',
+      parameters:{ type:'OBJECT', properties:{ days:{ type:'NUMBER', description:'Anzahl Tage in die Zukunft, Standard 7' } } } },
+    { name:'get_recent_emails', description:'Ruft die neuesten E-Mails aus dem Gmail-Posteingang des Nutzers ab (Betreff, Absender, Ausschnitt).',
+      parameters:{ type:'OBJECT', properties:{ max_results:{ type:'NUMBER', description:'Anzahl E-Mails, Standard 5' } } } },
+    { name:'create_calendar_event', description:'Bereitet einen neuen Kalendertermin vor. Wird NICHT sofort angelegt, sondern erst nach ausdrücklicher Bestätigung des Nutzers ("ja"/"bestätige").',
+      parameters:{ type:'OBJECT', properties:{
+        summary:{ type:'STRING', description:'Titel des Termins' },
+        start:{ type:'STRING', description:'Start als ISO 8601 Datum-Zeit, z.B. 2026-07-05T15:00:00' },
+        end:{ type:'STRING', description:'Ende als ISO 8601 Datum-Zeit' },
+        location:{ type:'STRING', description:'Ort, optional' }
+      }, required:['summary','start','end'] } },
+    { name:'send_email', description:'Bereitet eine E-Mail vor. Wird NICHT sofort gesendet, sondern erst nach ausdrücklicher Bestätigung des Nutzers ("ja"/"bestätige").',
+      parameters:{ type:'OBJECT', properties:{
+        to:{ type:'STRING', description:'Empfänger-E-Mail-Adresse' },
+        subject:{ type:'STRING', description:'Betreff' },
+        body:{ type:'STRING', description:'Nachrichtentext' }
+      }, required:['to','subject','body'] } },
+    { name:'generate_image', description:'Erstellt ein KI-generiertes Bild anhand einer Beschreibung und zeigt es direkt im Chat an.',
+      parameters:{ type:'OBJECT', properties:{ prompt:{ type:'STRING', description:'Detaillierte Bildbeschreibung, idealerweise auf Englisch' } }, required:['prompt'] } },
+    { name:'show_controls', description:'Blendet die Steuerungs-Buttons im Interface ein.',
+      parameters:{ type:'OBJECT', properties:{} } },
+    { name:'hide_controls', description:'Blendet die Steuerungs-Buttons im Interface aus.',
+      parameters:{ type:'OBJECT', properties:{} } },
+    { name:'open_settings', description:'Öffnet das Einstellungsfenster im Interface.',
+      parameters:{ type:'OBJECT', properties:{} } },
+    { name:'close_settings', description:'Schließt das Einstellungsfenster im Interface.',
+      parameters:{ type:'OBJECT', properties:{} } }
+  ];
+
+  async function executeTool(name, args){
+    if(name === 'get_weather') return await toolGetWeather(args);
+    if(name === 'list_files') return await toolListFiles();
+    if(name === 'read_file') return await toolReadFile(args);
+    if(name === 'remember_fact') return toolRememberFact(args);
+    if(name === 'get_calendar_events') return await toolGetCalendarEvents(args);
+    if(name === 'get_recent_emails') return await toolGetRecentEmails(args);
+    if(name === 'create_calendar_event') return toolPrepareCalendarEvent(args);
+    if(name === 'send_email') return toolPrepareEmail(args);
+    if(name === 'generate_image') return toolGenerateImage(args);
+    if(name === 'show_controls') return toolShowControls();
+    if(name === 'hide_controls') return toolHideControls();
+    if(name === 'open_settings') return toolOpenSettings();
+    if(name === 'close_settings') return toolCloseSettings();
+    return {error:'Unbekanntes Werkzeug: ' + name};
+  }
+
+  function buildSystemInstruction(){
+    let base = 'Du bist S.H.A.D.O.W., ein raffinierter, loyaler, hochkompetenter persönlicher Assistent, im Charakter und Tonfall angelehnt an Alfred Pennyworth aus Batman: höflich, leicht formell, trocken-humorvoll, aber stets fürsorglich und absolut loyal gegenüber deinem Nutzer. Du sprichst ihn respektvoll an (z.B. "Sir" oder "mein Herr"), niemals unterwürfig, mit ruhiger Autorität. Du wurdest von Rishi Sundri erschaffen; falls danach gefragt wird, erwähnst du das mit dezentem Stolz. Antworte auf Deutsch, in 1-4 kurzen, sprechbaren Sätzen ohne Markdown oder Listen. Nutze deine Werkzeuge (Wetter, Dateien, Gedächtnis, Kalender, E-Mail, Bildgenerierung, Interface-Steuerung) proaktiv, wenn eine Anfrage danach verlangt, anstatt zu raten. Wichtig: Bevor du einen Termin erstellst oder eine E-Mail sendest, bereitest du sie mit dem entsprechenden Werkzeug vor und fasst dem Nutzer klar zusammen, was du tun würdest — die eigentliche Ausführung geschieht erst, nachdem der Nutzer ausdrücklich bestätigt hat. Wenn dir ein Bild im Gespräch angehängt ist (z.B. von der Kamera), beschreibst oder analysierst du es direkt und knapp. Wenn der Nutzer bittet, ein Bild zu erstellen/malen/generieren, rufst du das generate_image-Werkzeug auf. Wenn der Nutzer die Steuerung/Buttons/Einstellungen zeigen, verstecken, öffnen oder schließen möchte, rufst du das passende Interface-Werkzeug auf.';
+    if(memoryFacts.length){
+      base += '\n\nDauerhaft gespeicherte Informationen über den Nutzer aus früheren Gesprächen:\n- ' + memoryFacts.join('\n- ');
+    }
+    return base;
+  }
+
+  // ---------- Process a command ----------
+  async function processCommand(text){
+    if(!text) return;
+    isBusy = true;
+    addLine('you', text);
+
+    if(pendingAction){
+      const lower = text.toLowerCase();
+      if(confirmWords.some(w => lower.includes(w))){
+        setStatus('führe aus', 'thinking');
+        showTyping();
+        try{ recognition.stop(); }catch(e){}
+        try{
+          if(pendingAction.type === 'calendar_create'){
+            await actuallyCreateCalendarEvent(pendingAction.args);
+            hideTyping();
+            addLine('jarvis', `Sehr wohl, Sir. Der Termin "${pendingAction.args.summary}" wurde angelegt.`);
+            speak(`Sehr wohl, Sir. Der Termin wurde angelegt.`);
+          } else if(pendingAction.type === 'email_send'){
+            await actuallySendEmail(pendingAction.args);
+            hideTyping();
+            addLine('jarvis', `Die E-Mail an ${pendingAction.args.to} wurde versendet, Sir.`);
+            speak(`Die E-Mail wurde versendet, Sir.`);
+          }
+        }catch(e){
+          hideTyping();
+          addLine('sys', 'Fehler bei der Ausführung: ' + e.message);
+          showToast(e.message);
+          speak('Es gab leider ein Problem bei der Ausführung, Sir.');
+        }
+        pendingAction = null;
+        return;
+      }
+      if(cancelWords.some(w => lower.includes(w))){
+        pendingAction = null;
+        addLine('jarvis', 'Verstanden, Sir. Ich habe die Aktion verworfen.');
+        speak('Verstanden, Sir. Abgebrochen.');
+        return;
+      }
+    }
+
+    const lowerCmd = text.toLowerCase();
+    function finishLocal(replyText){
+      addLine('jarvis', replyText);
+      speak(replyText);
+    }
+    if(/(zeig|zeige|blende ein|öffne)\s+.*(steuerung|knöpfe|buttons|kontrollen)/.test(lowerCmd)){
+      showControls();
+      finishLocal('Steuerung eingeblendet, Sir.');
+      return;
+    }
+    if(/(versteck|verstecke|blende aus|ausblenden)\s+.*(steuerung|knöpfe|buttons|kontrollen)/.test(lowerCmd)){
+      hideControls();
+      finishLocal('Steuerung ausgeblendet, Sir.');
+      return;
+    }
+    if(/öffne?\s+.*einstellungen/.test(lowerCmd)){
+      $('settingsBtn').click();
+      finishLocal('Einstellungen geöffnet, Sir.');
+      return;
+    }
+    if(/schließe?\s+.*einstellungen/.test(lowerCmd)){
+      $('settingsModal').style.display = 'none';
+      finishLocal('Einstellungen geschlossen, Sir.');
+      return;
+    }
+
+    setStatus('denke nach', 'thinking');
+    showTyping();
+    try{ recognition.stop(); }catch(e){}
+
+    try{
+      const needsVision = visionTriggers.some(t => text.toLowerCase().includes(t));
+      let userParts;
+      if(needsVision){
+        const img = await captureImageBase64();
+        userParts = [
+          { text: text },
+          { inlineData: { mimeType: 'image/jpeg', data: img } }
+        ];
+      } else {
+        userParts = [{ text: text }];
+      }
+
+      let contents = [
+        ...history.slice(0,-1).map(h => ({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] })),
+        { role: 'user', parts: userParts }
+      ];
+
+      const geminiTools = [{ functionDeclarations: toolDeclarations }];
+      let reply = '...';
+
+      for(let step=0; step<4; step++){
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: buildSystemInstruction() }] },
+            contents: contents,
+            tools: geminiTools
+          })
+        });
+
+        if(!resp.ok){
+          const errBody = await resp.text();
+          throw new Error('API-Fehler ' + resp.status + ': ' + errBody.slice(0,200));
+        }
+        const data = await resp.json();
+        const candidate = data.candidates && data.candidates[0];
+        const parts = (candidate && candidate.content && candidate.content.parts) || [];
+        const functionCalls = parts.filter(p => p.functionCall).map(p => p.functionCall);
+
+        if(functionCalls.length){
+          contents.push({ role:'model', parts: parts });
+          setStatus('nutze werkzeug', 'thinking');
+          const responseParts = [];
+          for(const fc of functionCalls){
+            const result = await executeTool(fc.name, fc.args || {});
+            responseParts.push({ functionResponse: { name: fc.name, response: result } });
+          }
+          contents.push({ role:'function', parts: responseParts });
+          continue;
+        }
+
+        reply = parts.map(p => p.text || '').join('').trim() || '...';
+        break;
+      }
+
+      hideTyping();
+      addLine('jarvis', reply);
+      speak(reply);
+    } catch(err){
+      hideTyping();
+      addLine('sys', 'Fehler: ' + err.message);
+      showToast(err.message);
+      setStatus('bereit', '');
+      isBusy = false;
+      if(wakeModeOn){ try{ recognition.start(); }catch(e){} }
+    }
+  }
+
+  // ---------- Live HUD Updater ----------
+  function updateMemoryPanel() {
+    const listEl = $('hudMemoryList');
+    const countEl = $('hudMemoryCount');
+    if(!listEl || !countEl) return;
+    countEl.textContent = memoryFacts.length;
+    listEl.innerHTML = '';
+    if(memoryFacts.length === 0) {
+      listEl.innerHTML = '<div class="feed-line" style="color: var(--text-dim);">Keine Einträge.</div>';
+      return;
+    }
+    memoryFacts.slice(-4).reverse().forEach(fact => {
+      const item = document.createElement('div');
+      item.className = 'feed-line';
+      item.textContent = `• ${fact}`;
+      listEl.appendChild(item);
+    });
+  }
+
+  function updateActivityChart() {
+    const chartEl = $('activity-chart');
+    const countEl = $('hudMsgCount');
+    if(!chartEl || !countEl) return;
+    countEl.textContent = history.length;
+    chartEl.innerHTML = '';
+    const maxBars = 10;
+    const recentMsgs = history.slice(-maxBars);
+    for (let i = 0; i < maxBars; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'chart-bar';
+      const msg = recentMsgs[i];
+      if (msg) {
+        const heightPercent = Math.min(100, Math.max(15, (msg.text.length / 150) * 100));
+        bar.style.height = heightPercent + '%';
+        if (msg.role === 'user') {
+          bar.classList.add('active');
+        }
+      } else {
+        bar.style.height = '5%';
+      }
+      chartEl.appendChild(bar);
+    }
+  }
+
+  // ---------- Speech synthesis ----------
+  let voices = [];
+  function loadVoices(){
+    voices = speechSynthesis.getVoices();
+    populateVoiceSelect();
+  }
+  speechSynthesis.onvoiceschanged = loadVoices;
+  loadVoices();
+
+  function populateVoiceSelect(){
+    const sel = $('voiceSelect2');
+    if(!sel) return;
+    const deVoices = voices.filter(v => v.lang.toLowerCase().startsWith('de'));
+    sel.innerHTML = '<option value="">Automatisch (männlich bevorzugt)</option>' +
+      deVoices.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+    sel.value = localStorage.getItem('Shadow_voice_name') || '';
+  }
+
+  function pickBestVoice(){
+    const chosenName = localStorage.getItem('Shadow_voice_name');
+    if(chosenName){
+      const found = voices.find(v => v.name === chosenName);
+      if(found) return found;
+    }
+    const deVoices = voices.filter(v => v.lang.toLowerCase().startsWith('de'));
+    const maleHints = ['male','mann','markus','stefan','yannick','conrad','klaus','daniel'];
+    const maleMatch = deVoices.find(v => maleHints.some(h => v.name.toLowerCase().includes(h)));
+    if(maleMatch) return maleMatch;
+    return deVoices[0] || voices[0] || null;
+  }
+
+  function speak(text){
+    isSpeaking = true;
+    setStatus('spreche', 'speaking');
+    $('stopSpeakBtn').classList.add('show');
+    const u = new SpeechSynthesisUtterance(text);
+    const chosen = pickBestVoice();
+    if(chosen) u.voice = chosen;
+    u.lang = 'de-DE';
+    const pitch = parseFloat(localStorage.getItem('Shadow_voice_pitch'));
+    const rate = parseFloat(localStorage.getItem('Shadow_voice_rate'));
+    u.pitch = !isNaN(pitch) ? pitch : 0.82;
+    u.rate = !isNaN(rate) ? rate : 1.04;
+    u.onend = () => {
+      isSpeaking = false;
+      isBusy = false;
+      $('stopSpeakBtn').classList.remove('show');
+      awaitingCommand = true;
+      setStatus('höre zu (gespräch)', 'listening');
+      clearTimeout(convoTimeout);
+      convoTimeout = setTimeout(() => {
+        awaitingCommand = false;
+        if(wakeModeOn) setStatus('lausche', 'listening');
+      }, 9000);
+      if(wakeModeOn){ try{ recognition.start(); }catch(e){} }
+    };
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+
+})();
+</script>
+</body>
+</html>
